@@ -31,36 +31,9 @@ AI-powered developer utilities for Slack.
 - Node.js v18+
 - Slack workspace with Bot Token and App Token
 
-## Installation
-
-```bash
-git clone <repo-url>
-cd STDerr
-npm install
-```
-
-## Configuration
-
-Create a `.env` file:
-
-```
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-```
-
-## Running
-
-```bash
-node index.js
-```
-
 ## Architecture
 
 - `index.js` - Main Slack bot (Socket Mode)
 - `ai.js` - Unified AI chat interface
 - `providers.js` - Provider registry
 - `store.js` - Per-user config persistence
-
-## License
-
-ISC
