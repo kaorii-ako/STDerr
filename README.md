@@ -31,6 +31,11 @@ AI-powered developer utilities for Slack.
 - Node.js v18+
 - Slack workspace with Bot Token and App Token
 
+## AI Usage
+
+- Code completion
+- Debugging
+
 ## Architecture
 
 - `index.js` - Main Slack bot (Socket Mode)
