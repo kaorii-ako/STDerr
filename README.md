@@ -1,65 +1,67 @@
 # STDerr
 
-AI-powered developer utilities for Slack.
+AI-powered developer utilities for Slack. Default: **Hack Club AI** (free).
 
-## Features
+## Quick Start
+
+```bash
+cp .env.example .env   # fill in SLACK_BOT_TOKEN + SLACK_APP_TOKEN
+npm install
+npm start
+```
+
+Users can start asking questions immediately via `/stderr-ask` -- no provider setup needed when `HACKCLUB_API_KEY` is set.
+
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/stderr-ping` | Latency check |
-| `/stderr-timestamp` | Current Unix/ISO timestamp |
-| `/stderr-connect` | Connect to an AI provider (modal UI) |
+| `/stderr-ask <question>` | Ask anything -- free-form coding assistant |
+| `/stderr-commit <describe>` | Generate a Conventional Commit message |
+| `/stderr-regex <describe>` | Generate a regex from plain English |
+| `/stderr-stack <error>` | Explain a stack trace or error |
+| `/stderr-connect` | Pick an AI provider (modal UI) |
+| `/stderr-switch <provider>` | Quick-switch provider |
+| `/stderr-models` | List all available providers and models |
 | `/stderr-whoami` | Show current provider connection |
-| `/stderr-commit` | Generate Conventional Commit messages |
-| `/stderr-regex` | Generate regex from descriptions |
-| `/stderr-stack` | Explain error messages/stack traces |
+| `/stderr-ping` | Check bot latency |
+| `/stderr-timestamp` | Show Unix & ISO timestamp |
+| `/stderr-help` | List all commands |
 
 ## Supported AI Providers
 
-| Provider | Model |
-|----------|-------|
-| Claude (Anthropic) | claude-opus-4-8 |
-| ChatGPT (OpenAI) | gpt-4o |
-| MiMo V2.5 (Xiaomi) | mimo-v2.5 |
-| DeepSeek | deepseek-chat |
-| Groq | llama-3.3-70b-versatile |
-| Gemini (Google) | gemini-2.0-flash |
-| Moonshot (Kimi) | moonshot-v1-8k |
-
-## Prerequisites
-
-- Node.js v18+
-- Slack workspace with Bot Token and App Token
-
-## Installation
-
-```bash
-git clone <repo-url>
-cd STDerr
-npm install
-```
+| Provider | Model | Notes |
+|----------|-------|-------|
+| **Hack Club AI** | `google/gemini-2.5-flash` | **Free default** -- no API key needed |
+| Claude (Anthropic) | `claude-opus-4-8` | Requires Anthropic API key |
+| ChatGPT (OpenAI) | `gpt-4o` | Requires OpenAI API key |
+| MiMo V2.5 (Xiaomi) | `mimo-v2.5` | Free tier available |
+| DeepSeek | `deepseek-chat` | Requires DeepSeek API key |
+| Groq | `llama-3.3-70b-versatile` | Requires Groq API key |
+| Gemini (Google) | `gemini-2.0-flash` | Requires Google AI API key |
+| Moonshot (Kimi) | `moonshot-v1-8k` | Requires Moonshot API key |
 
 ## Configuration
 
-Create a `.env` file:
+Copy `.env.example` to `.env` and fill in:
 
 ```
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
+SLACK_BOT_TOKEN=xoxb-...      # Required -- from api.slack.com/apps
+SLACK_APP_TOKEN=xapp-...      # Required -- Socket Mode token
+HACKCLUB_API_KEY=...          # Optional -- shared default for all users
 ```
 
-## Running
-
-```bash
-node index.js
-```
+When `HACKCLUB_API_KEY` is set, all users get instant Hack Club AI access without running `/stderr-connect`. They can still switch to other providers.
 
 ## Architecture
 
-- `index.js` - Main Slack bot (Socket Mode)
-- `ai.js` - Unified AI chat interface
-- `providers.js` - Provider registry
-- `store.js` - Per-user config persistence
+```
+index.js      -- Main Slack bot (Socket Mode, command handlers)
+ai.js         -- Unified AI chat interface (Anthropic + OpenAI-compatible)
+providers.js  -- Provider registry (base URLs, models, flags)
+store.js      -- Per-user config persistence (atomic writes, in-memory cache)
+.env.example  -- Environment variable template
+```
 
 ## License
 

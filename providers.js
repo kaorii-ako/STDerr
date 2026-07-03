@@ -4,6 +4,15 @@
 // MiMo: verify the baseURL and model against your MiMo deployment before use.
 
 module.exports = {
+  hackclub: {
+    label: 'Hack Club AI (Free)',
+    kind: 'openai',
+    baseURL: 'https://ai.hackclub.com/proxy/v1',
+    model: 'google/gemini-2.5-flash',
+    keyHint: 'your Hack Club API key (get from ai.hackclub.com)',
+    default: true,
+    free: true,
+  },
   claude: {
     label: 'Claude (Anthropic)',
     kind: 'anthropic',
