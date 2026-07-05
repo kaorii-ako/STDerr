@@ -59,8 +59,8 @@ function set(userId, config) {
 }
 
 /**
- * Return the default provider config when HACKCLUB_API_KEY env var is set.
- * Returns null if no shared default is configured.
+ * Return the shared Hack Club AI config from HACKCLUB_API_KEY env var.
+ * All users share the same key — no per-user provider selection.
  */
 function getDefault() {
   const apiKey = process.env.HACKCLUB_API_KEY;
@@ -68,23 +68,9 @@ function getDefault() {
   return { provider: 'hackclub', apiKey };
 }
 
-/**
- * Resolve the effective config for a user.
- * 1. If the user has an explicit /stderr-connect config, use that.
- * 2. Otherwise, fall back to the global default (HACKCLUB_API_KEY).
- * Returns null only if neither exists.
- */
+/** Every user gets the same shared config. */
 function resolve(userId) {
-  const userCfg = get(userId);
-  const defaultCfg = getDefault();
-  if (userCfg) {
-    // If user has a provider but no apiKey, merge with default key
-    if (!userCfg.apiKey && defaultCfg?.apiKey) {
-      return { provider: userCfg.provider, apiKey: defaultCfg.apiKey };
-    }
-    return userCfg;
-  }
-  return defaultCfg;
+  return getDefault();
 }
 
 module.exports = { get, set, getDefault, resolve };

@@ -38,10 +38,6 @@ const HELP_TEXT = [
   '*Available commands:*',
   '• `/stderr-ping` — Check bot latency',
   '• `/stderr-timestamp` — Show current Unix & ISO timestamp',
-  '• `/stderr-connect` — Pick an AI provider and connect',
-  '• `/stderr-switch <provider>` — Quick-switch to a different provider',
-  '• `/stderr-models` — List all available AI providers and models',
-  '• `/stderr-whoami` — Show which provider you are connected to',
   '• `/stderr-ask <question>` — Ask anything (free-form coding assistant)',
   '• `/stderr-commit <describe change>` — Generate a Conventional Commit message',
   '• `/stderr-regex <describe pattern>` — Generate a regular expression',
@@ -56,177 +52,6 @@ app.command('/stderr-help', async ({ ack, respond }) => {
     text: HELP_TEXT,
     blocks: [{ type: 'section', text: { type: 'mrkdwn', text: HELP_TEXT } }],
   });
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-models — list every provider with model info
-// ---------------------------------------------------------------------------
-app.command('/stderr-models', async ({ ack, respond, command }) => {
-  await ack();
-  const current = store.get(command.user_id);
-  const lines = Object.entries(providers).map(([key, def]) => {
-    const parts = [`• *${def.label}*`, `\`${def.model}\``];
-    if (def.default) parts.push('_(default)_');
-    if (current && current.provider === key) parts.push('_✓ connected_');
-    return parts.join(' — ');
-  });
-  const text = '*Available models:*\n' + lines.join('\n');
-  await respond({
-    response_type: 'ephemeral',
-    text,
-    blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }],
-  });
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-switch <provider> — instant provider switch
-// ---------------------------------------------------------------------------
-app.command('/stderr-switch', async ({ ack, respond, command }) => {
-  await ack();
-  const target = (command.text || '').trim().toLowerCase();
-  if (!target) {
-    const keys = Object.keys(providers).join(', ');
-    await respond(`Usage: \`/stderr-switch <provider>\`\nAvailable providers: ${keys}`);
-    return;
-  }
-  const def = providers[target];
-  if (!def) {
-    await respond(`Unknown provider \`${target}\`. Run \`/stderr-models\` to see available providers.`);
-    return;
-  }
-  const current = store.get(command.user_id);
-  if (current) {
-    // Existing user: keep their API key, just switch provider
-    store.set(command.user_id, { provider: target, apiKey: current.apiKey });
-  } else {
-    // No prior connection
-    if (def.free) {
-      store.set(command.user_id, { provider: target, apiKey: '' });
-    } else {
-      await respond(
-        'You are not connected yet. Run `/stderr-connect` first to add an API key, then switch.'
-      );
-      return;
-    }
-  }
-  await respond(`Switched to *${def.label}* (model \`${def.model}\`).`);
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-connect — provider picker (skip API key modal for free providers)
-// ---------------------------------------------------------------------------
-app.command('/stderr-connect', async ({ ack, respond, command }) => {
-  await ack();
-  const current = store.get(command.user_id);
-  const currentLine = current
-    ? `Currently connected: *${providers[current.provider]?.label || current.provider}*\n`
-    : 'Not connected yet.\n';
-
-  await respond({
-    response_type: 'ephemeral',
-    text: 'Select an AI provider',
-    blocks: [
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: currentLine + 'Pick a provider to connect:' },
-        accessory: {
-          type: 'static_select',
-          action_id: 'select_provider',
-          placeholder: { type: 'plain_text', text: 'Choose a provider' },
-          options: Object.entries(providers).map(([key, def]) => ({
-            text: { type: 'plain_text', text: def.label },
-            value: key,
-          })),
-        },
-      },
-    ],
-  });
-});
-
-// When a provider is selected from the dropdown, either connect directly (free)
-// or open the API-key modal (paid).
-app.action('select_provider', async ({ ack, body, client, respond, logger }) => {
-  await ack();
-  try {
-    const providerKey = body.actions[0].selected_option.value;
-    const def = providers[providerKey];
-
-    // Free providers: connect immediately, no API key needed
-    if (def.free) {
-      store.set(body.user.id, { provider: providerKey, apiKey: '' });
-      await respond({
-        response_type: 'ephemeral',
-        text: `Connected to *${def.label}* (model \`${def.model}\`). No API key needed!`,
-      });
-      return;
-    }
-
-    // Paid providers: open modal for API key
-    await client.views.open({
-      trigger_id: body.trigger_id,
-      view: {
-        type: 'modal',
-        callback_id: 'connect_modal',
-        private_metadata: providerKey,
-        title: { type: 'plain_text', text: 'Connect AI' },
-        submit: { type: 'plain_text', text: 'Save' },
-        close: { type: 'plain_text', text: 'Cancel' },
-        blocks: [
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: `Provider: *${def.label}*\nModel: \`${def.model}\`` },
-          },
-          {
-            type: 'input',
-            block_id: 'apikey_block',
-            label: { type: 'plain_text', text: 'API key' },
-            element: {
-              type: 'plain_text_input',
-              action_id: 'apikey_input',
-              placeholder: { type: 'plain_text', text: def.keyHint || 'API key' },
-            },
-          },
-        ],
-      },
-    });
-  } catch (err) {
-    logger.error('Failed to open connect modal:', err.message);
-  }
-});
-
-app.view('connect_modal', async ({ ack, body, view, logger }) => {
-  try {
-    const providerKey = view.private_metadata;
-    const apiKey = view.state.values?.apikey_block?.apikey_input?.value?.trim();
-    if (!apiKey) {
-      await ack({
-        response_action: 'errors',
-        errors: { apikey_block: 'Please enter an API key.' },
-      });
-      return;
-    }
-    store.set(body.user.id, { provider: providerKey, apiKey });
-    await ack();
-  } catch (err) {
-    logger.error('Failed to save provider config:', err.message);
-    await ack(); // Still close modal to avoid Slack 3-second timeout
-  }
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-whoami
-// ---------------------------------------------------------------------------
-app.command('/stderr-whoami', async ({ ack, respond, command }) => {
-  await ack();
-  const cfg = store.resolve(command.user_id);
-  if (!cfg) {
-    await respond('Not connected. Run `/stderr-connect` to pick a provider.');
-    return;
-  }
-  const def = providers[cfg.provider];
-  const isDefault = !store.get(command.user_id) && store.getDefault();
-  const note = isDefault ? ' (auto-connected via HACKCLUB_API_KEY)' : '';
-  await respond(`Connected to *${def?.label || cfg.provider}* (model \`${def?.model}\`).${note}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -272,8 +97,7 @@ function aiCommand(system, { wrapCode = false, format = false, usage } = {}) {
     const cfg = store.resolve(command.user_id);
     if (!cfg) {
       await respond(
-        'Not connected. Run `/stderr-connect` to pick a provider, ' +
-        'or set `HACKCLUB_API_KEY` in your `.env` for instant Hack Club AI access.'
+        'Not connected. Make sure `HACKCLUB_API_KEY` is set in `.env` on the server.'
       );
       return;
     }
@@ -356,8 +180,8 @@ app.command(
   try {
     await app.start();
     const defaultNote = store.getDefault()
-      ? ' | Hack Club AI ready (HACKCLUB_API_KEY)'
-      : ' | no HACKCLUB_API_KEY set, users must /stderr-connect';
+      ? ' | Hack Club AI ready'
+      : ' | WARNING: no HACKCLUB_API_KEY in .env — AI commands will not work';
     console.log('STDerr is running (Socket Mode)' + defaultNote);
   } catch (err) {
     console.error('Failed to start STDerr:', err.message);
