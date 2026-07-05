@@ -1,0 +1,23 @@
+# STDerr — Hack Club AI deploy commands
+# Run these on the server via: ssh hxshin@hackclub.app
+
+# 1. Pull latest code (force-sync to remote)
+cd ~/STDerr && git fetch origin && git reset --hard origin/feat/hackclub-ai-integration
+
+# 2. Install deps (first time only, safe to re-run)
+cd ~/STDerr && npm install
+
+# 3. Create/update .env with your tokens + Hack Club AI key
+#    Replace the Slack tokens with your real ones!
+cat > ~/STDerr/.env << 'EOF'
+SLACK_BOT_TOKEN=xoxb-REPLACE-ME
+SLACK_APP_TOKEN=xapp-REPLACE-ME
+HACKCLUB_API_KEY=sk-hc-v1-REPLACE-ME
+EOF
+
+# 4. Stop old process, start new one
+pkill -f 'node index.js' || true
+cd ~/STDerr && nohup node index.js > /tmp/stderr.log 2>&1 &
+
+# 5. Verify it's running
+sleep 2 && ps aux | grep 'node index' && cat /tmp/stderr.log
