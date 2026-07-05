@@ -75,7 +75,16 @@ function getDefault() {
  * Returns null only if neither exists.
  */
 function resolve(userId) {
-  return get(userId) || getDefault();
+  const userCfg = get(userId);
+  const defaultCfg = getDefault();
+  if (userCfg) {
+    // If user has a provider but no apiKey, merge with default key
+    if (!userCfg.apiKey && defaultCfg?.apiKey) {
+      return { provider: userCfg.provider, apiKey: defaultCfg.apiKey };
+    }
+    return userCfg;
+  }
+  return defaultCfg;
 }
 
 module.exports = { get, set, getDefault, resolve };
