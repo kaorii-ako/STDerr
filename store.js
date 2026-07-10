@@ -68,9 +68,24 @@ function getDefault() {
   return { provider: 'hackclub', apiKey };
 }
 
-/** Every user gets the same shared config. */
+function remove(userId) {
+  ensureLoaded();
+  if (cache[userId]) {
+    delete cache[userId];
+    saveAtomic(cache);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Per-user key first (set via /stderr-connect), then the shared
+ * HACKCLUB_API_KEY from .env as a fallback.
+ */
 function resolve(userId) {
+  const user = get(userId);
+  if (user && user.apiKey) return user;
   return getDefault();
 }
 
-module.exports = { get, set, getDefault, resolve };
+module.exports = { get, set, remove, getDefault, resolve };
