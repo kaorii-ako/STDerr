@@ -8,8 +8,6 @@ AI-powered developer utilities for Slack.
 |---------|-------------|
 | `/stderr-ping` | Latency check |
 | `/stderr-timestamp` | Current Unix/ISO timestamp |
-| `/stderr-connect` | Connect to an AI provider (modal UI) |
-| `/stderr-whoami` | Show current provider connection |
 | `/stderr-commit` | Generate Conventional Commit messages |
 | `/stderr-regex` | Generate regex from descriptions |
 | `/stderr-stack` | Explain error messages/stack traces |
