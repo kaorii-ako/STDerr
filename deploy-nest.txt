@@ -1,0 +1,89 @@
+# STDerr — Deploy 24/7 on Nest (systemd user service)
+# SSH Access: ssh hxshin@hackclub.app
+#
+# NOTE: On Nest you are NOT root — you land as your own user (hxshin).
+# So we use a *user* systemd service (systemctl --user), which Nest fully
+# supports: lingering is enabled, so the bot keeps running after you log
+# out and comes back automatically after server reboots.
+#
+# ========================================================================
+# ONE-TIME SETUP (run each block on the server after `ssh hxshin@hackclub.app`)
+# ========================================================================
+
+# --- 1. Check node is available (Nest usually has it; note the path) ---
+which node && node --version
+# If missing, install via nix:  nix-env -iA nixpkgs.nodejs_22
+# Whatever `which node` prints is the path you use in ExecStart below.
+
+# --- 2. Clone the repo (first time only) ---
+cd ~
+git clone https://github.com/kaorii-ako/STDerr.git
+cd ~/STDerr
+git checkout feat/hackclub-ai-integration
+npm install
+
+# --- 3. Create .env (never committed — recreate it on the server) ---
+cat > ~/STDerr/.env << 'EOF'
+SLACK_BOT_TOKEN=xoxb-REPLACE-ME
+SLACK_APP_TOKEN=xapp-REPLACE-ME
+HACKCLUB_API_KEY=sk-hc-v1-REPLACE-ME
+EOF
+chmod 600 ~/STDerr/.env
+
+# --- 4. Test it runs manually first ---
+cd ~/STDerr && node index.js
+# Try /stderr-ping in Slack. If it responds, press Ctrl+C and continue.
+
+# --- 5. Create the systemd USER service ---
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/stderr.service << 'EOF'
+[Unit]
+Description=STDerr Slack Bot
+After=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+WorkingDirectory=%h/STDerr
+ExecStart=/usr/bin/env node index.js
+
+[Install]
+WantedBy=default.target
+EOF
+# (ExecStart uses `env node` so it works wherever node lives.
+#  If that fails, replace with the absolute path from `which node`.)
+
+# --- 6. Reload, enable, and start ---
+systemctl --user daemon-reload
+systemctl --user enable --now stderr.service
+
+# --- 7. Confirm it's up and watch logs ---
+systemctl --user status stderr.service
+journalctl --user -u stderr.service -f
+# (Ctrl+C to stop watching logs — the bot keeps running.)
+
+# ========================================================================
+# EVERYDAY COMMANDS
+# ========================================================================
+
+# Restart after pulling new code:
+cd ~/STDerr && git pull && npm install && systemctl --user restart stderr.service
+
+# RERUN / restart the bot:
+systemctl --user restart stderr.service
+
+# Stop the bot:
+systemctl --user stop stderr.service
+
+# Status / recent logs:
+systemctl --user status stderr.service
+journalctl --user -u stderr.service -n 50
+
+# Live logs:
+journalctl --user -u stderr.service -f
+
+# ========================================================================
+# ONE-LINER: full redeploy from your laptop (no interactive SSH needed)
+# ========================================================================
+# ssh hxshin@hackclub.app 'cd ~/STDerr && git fetch origin && git reset --hard origin/feat/hackclub-ai-integration && npm install && systemctl --user restart stderr.service && systemctl --user status stderr.service --no-pager'
