@@ -8,7 +8,16 @@ module.exports = {
     label: 'Hack Club AI (Free)',
     kind: 'openai',
     baseURL: 'https://ai.hackclub.com/proxy/v1',
-    model: 'google/gemini-2.5-flash',
+    model: 'qwen/qwen3-32b',
+    // Tried in order when the primary model fails with 402/429/404.
+    fallbacks: [
+      'moonshotai/kimi-k2.6',
+      'google/gemini-2.5-flash',
+      'openai/gpt-oss-120b:free',
+      'qwen/qwen3-coder:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+    ],
+    healthURL: 'https://ai.hackclub.com/up',
     keyHint: 'your Hack Club API key (get from ai.hackclub.com)',
     default: true,
     free: true,

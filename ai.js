@@ -33,18 +33,51 @@ async function ask(providerKey, apiKey, system, user) {
   }
 
   const client = new OpenAI({ apiKey, baseURL: def.baseURL });
-  const res = await client.chat.completions.create({
-    model: def.model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-  });
-  const text = (res.choices[0]?.message?.content || '').trim();
-  if (!text) {
-    throw new Error('The AI returned an empty response. Try rephrasing your request.');
+
+  // Try the primary model, then any configured fallbacks. Free upstream
+  // capacity comes and goes (402 = pool out of credits, 429 = model
+  // rate-limited), so cycling models makes the bot much more resilient.
+  const models = [def.model, ...(def.fallbacks || [])];
+  let lastErr;
+  for (const model of models) {
+    try {
+      const res = await client.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+      });
+      const text = (res.choices[0]?.message?.content || '').trim();
+      if (!text) {
+        throw new Error('The AI returned an empty response. Try rephrasing your request.');
+      }
+      return text;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.status || err?.response?.status;
+      // Only fall through to the next model for capacity-type failures.
+      if (![402, 404, 429, 502, 503].includes(status)) throw err;
+    }
   }
-  return text;
+
+  // All models failed on capacity errors. If the provider exposes a health
+  // endpoint, check whether the whole service is down and say so clearly.
+  if (def.healthURL) {
+    try {
+      const health = await fetch(def.healthURL).then((r) => r.json());
+      if (health?.status === 'down' || (typeof health?.balanceRemaining === 'number' && health.balanceRemaining <= 0)) {
+        throw new Error(
+          'Hack Club AI is currently out of upstream credits (service-wide, not your key). ' +
+            'Check https://ai.hackclub.com/up and try again later.'
+        );
+      }
+    } catch (e) {
+      if (e.message.startsWith('Hack Club AI is currently')) throw e;
+      // health check itself failed — fall through to the original error
+    }
+  }
+  throw lastErr;
 }
 
 /**

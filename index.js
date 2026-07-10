@@ -45,6 +45,7 @@ const HELP_TEXT = [
   '• `/stderr-connect <api-key>` — Use your own Hack Club AI key (get one at https://ai.hackclub.com/keys)',
   '• `/stderr-disconnect` — Remove your saved key and go back to the shared default',
   '• `/stderr-status` — Show which key/provider you are using',
+  '• `/stderr-health` — Check if Hack Club AI is up',
   '• `/stderr-help` — Show this message',
 ].join('\n');
 
@@ -75,20 +76,30 @@ app.command('/stderr-connect', async ({ ack, respond, command }) => {
 
   await respond({ response_type: 'ephemeral', text: 'Validating your key…' });
 
+  let note = '';
   try {
     await ask('hackclub', apiKey, 'Reply with the single word: ok', 'ping');
   } catch (err) {
-    await respond(
-      `That key didn't work: ${friendlyError(err)}\n` +
-        'Double-check it at https://ai.hackclub.com/keys and try again.'
-    );
-    return;
+    const status = err?.status || err?.response?.status;
+    const capacityIssue =
+      [402, 429, 502, 503].includes(status) ||
+      /out of upstream credits|rate limit/i.test(err.message);
+    if (!capacityIssue) {
+      await respond(
+        `That key didn't work: ${friendlyError(err)}\n` +
+          'Double-check it at https://ai.hackclub.com/keys and try again.'
+      );
+      return;
+    }
+    // Service-wide capacity problem, not the key's fault — save it anyway.
+    note =
+      '\n:warning: Hack Club AI seems to be over capacity right now, so the key could not be fully verified. It was saved anyway — try `/stderr-ask` later.';
   }
 
   store.set(command.user_id, { provider: 'hackclub', apiKey });
   await respond(
     ':white_check_mark: Connected! Your personal Hack Club AI key is saved. ' +
-      'All `/stderr-*` AI commands will now use it.'
+      'All `/stderr-*` AI commands will now use it.' + note
   );
 });
 
@@ -153,6 +164,26 @@ const ASK_SYSTEM =
   'You are a helpful coding assistant called STDerr. Be concise and practical. ' +
   'Use Slack mrkdwn formatting where helpful: wrap code in single backticks for inline, ' +
   'triple backticks for multi-line. Use *bold* for emphasis.';
+
+// ---------------------------------------------------------------------------
+// /stderr-health — check Hack Club AI service status
+// ---------------------------------------------------------------------------
+app.command('/stderr-health', async ({ ack, respond }) => {
+  await ack();
+  try {
+    const h = await fetch('https://ai.hackclub.com/up').then((r) => r.json());
+    const up = h.status === 'up';
+    const emoji = up ? ':large_green_circle:' : ':red_circle:';
+    const balance = typeof h.balanceRemaining === 'number' ? h.balanceRemaining.toFixed(2) : '?';
+    await respond(
+      `${emoji} Hack Club AI is *${h.status}*\n` +
+        `Upstream balance: \`$${balance}\`` +
+        (up ? '' : '\nAI commands will fail until Hack Club tops up credits. Not a bug in this bot.')
+    );
+  } catch (err) {
+    await respond(`Could not reach https://ai.hackclub.com/up — ${err.message}`);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Friendly error messages for common API failures
