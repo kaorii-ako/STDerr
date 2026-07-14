@@ -1,8 +1,8 @@
 // Unified chat call across providers. Routes to the Anthropic SDK for
 // kind 'anthropic', otherwise to an OpenAI-compatible /chat/completions endpoint.
 //
-// apiKey resolution: callers should pass the resolved apiKey (from store.resolve()
-// which falls back to HACKCLUB_API_KEY env var when no user-specific key exists).
+// apiKey resolution: callers should pass the resolved apiKey (from store.getDefault(),
+// the shared HACKCLUB_API_KEY env var — every user shares this one key).
 
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
@@ -11,7 +11,7 @@ const providers = require('./providers');
 async function ask(providerKey, apiKey, system, user) {
   const def = providers[providerKey];
   if (!def) throw new Error(`Unknown provider: ${providerKey}`);
-  if (!apiKey) throw new Error(`No API key for provider "${def.label}". Run /stderr-connect or set HACKCLUB_API_KEY.`);
+  if (!apiKey) throw new Error(`No API key for provider "${def.label}". Set HACKCLUB_API_KEY in .env.`);
 
   if (def.kind === 'anthropic') {
     const client = new Anthropic({ apiKey });

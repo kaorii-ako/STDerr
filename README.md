@@ -10,7 +10,7 @@ npm install
 npm start
 ```
 
-Set `HACKCLUB_API_KEY` in your `.env` (free from [ai.hackclub.com/keys](https://ai.hackclub.com/keys)) and every user can immediately run `/stderr-ask` — no per-user setup needed. Users can also bring their own key with `/stderr-connect`.
+Set `HACKCLUB_API_KEY` in your `.env` (free from [ai.hackclub.com/keys](https://ai.hackclub.com/keys)) and every user can immediately run `/stderr-ask` — no per-user setup, no API key needed on their end. Everyone shares the admin's key.
 
 ## Commands
 
@@ -20,9 +20,6 @@ Set `HACKCLUB_API_KEY` in your `.env` (free from [ai.hackclub.com/keys](https://
 | `/stderr-commit <describe>` | Generate a Conventional Commit message |
 | `/stderr-regex <describe>` | Generate a regex from plain English |
 | `/stderr-stack <error>` | Explain a stack trace or error |
-| `/stderr-connect <api-key>` | Save your own Hack Club AI key (validated live) |
-| `/stderr-disconnect` | Remove your saved key, fall back to the shared default |
-| `/stderr-status` | Show which key/provider you are using |
 | `/stderr-health` | Check if Hack Club AI is up (service status + balance) |
 | `/stderr-ping` | Check bot latency |
 | `/stderr-timestamp` | Show Unix & ISO timestamp |
@@ -61,7 +58,7 @@ See [`deploy-nest.txt`](deploy-nest.txt) for running the bot on [Nest](https://h
 index.js      — Main Slack bot (Socket Mode, command handlers)
 ai.js         — Unified AI chat interface with model fallback chain
 providers.js  — Provider registry (base URLs, models, fallbacks)
-store.js      — Per-user config persistence (atomic writes, in-memory cache)
+store.js      — Shared HACKCLUB_API_KEY resolution from env
 .env.example  — Environment variable template
 ```
 

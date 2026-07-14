@@ -42,9 +42,6 @@ const HELP_TEXT = [
   '• `/stderr-commit <describe change>` — Generate a Conventional Commit message',
   '• `/stderr-regex <describe pattern>` — Generate a regular expression',
   '• `/stderr-stack <error text>` — Explain a stack trace or error',
-  '• `/stderr-connect <api-key>` — Use your own Hack Club AI key (get one at https://ai.hackclub.com/keys)',
-  '• `/stderr-disconnect` — Remove your saved key and go back to the shared default',
-  '• `/stderr-status` — Show which key/provider you are using',
   '• `/stderr-health` — Check if Hack Club AI is up',
   '• `/stderr-help` — Show this message',
 ].join('\n');
@@ -56,86 +53,6 @@ app.command('/stderr-help', async ({ ack, respond }) => {
     text: HELP_TEXT,
     blocks: [{ type: 'section', text: { type: 'mrkdwn', text: HELP_TEXT } }],
   });
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-connect — save a personal Hack Club AI key (validated live)
-// ---------------------------------------------------------------------------
-app.command('/stderr-connect', async ({ ack, respond, command }) => {
-  await ack(); // ack immediately so Slack never times out
-  const apiKey = (command.text || '').trim();
-
-  if (!apiKey) {
-    await respond(
-      'Usage: `/stderr-connect <api-key>`\n' +
-        'Get a free Hack Club AI key at https://ai.hackclub.com/keys, then run:\n' +
-        '`/stderr-connect sk-hc-v1-...`'
-    );
-    return;
-  }
-
-  await respond({ response_type: 'ephemeral', text: 'Validating your key…' });
-
-  let note = '';
-  try {
-    await ask('hackclub', apiKey, 'Reply with the single word: ok', 'ping');
-  } catch (err) {
-    const status = err?.status || err?.response?.status;
-    const capacityIssue =
-      [402, 429, 502, 503].includes(status) ||
-      /out of upstream credits|rate limit/i.test(err.message);
-    if (!capacityIssue) {
-      await respond(
-        `That key didn't work: ${friendlyError(err)}\n` +
-          'Double-check it at https://ai.hackclub.com/keys and try again.'
-      );
-      return;
-    }
-    // Service-wide capacity problem, not the key's fault — save it anyway.
-    note =
-      '\n:warning: Hack Club AI seems to be over capacity right now, so the key could not be fully verified. It was saved anyway — try `/stderr-ask` later.';
-  }
-
-  store.set(command.user_id, { provider: 'hackclub', apiKey });
-  await respond(
-    ':white_check_mark: Connected! Your personal Hack Club AI key is saved. ' +
-      'All `/stderr-*` AI commands will now use it.' + note
-  );
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-disconnect — remove personal key, fall back to shared default
-// ---------------------------------------------------------------------------
-app.command('/stderr-disconnect', async ({ ack, respond, command }) => {
-  await ack();
-  const removed = store.remove(command.user_id);
-  if (removed) {
-    const fallback = store.getDefault()
-      ? 'You are now using the shared default key.'
-      : 'No shared default key is configured, so AI commands will not work until you reconnect.';
-    await respond(`Your personal key was removed. ${fallback}`);
-  } else {
-    await respond('You had no personal key saved. Nothing changed.');
-  }
-});
-
-// ---------------------------------------------------------------------------
-// /stderr-status — show what key/provider the user resolves to
-// ---------------------------------------------------------------------------
-app.command('/stderr-status', async ({ ack, respond, command }) => {
-  await ack();
-  const personal = store.get(command.user_id);
-  const cfg = store.resolve(command.user_id);
-  if (!cfg) {
-    await respond(
-      'Not connected. Run `/stderr-connect <api-key>` with a free key from https://ai.hackclub.com/keys.'
-    );
-    return;
-  }
-  const label = providers[cfg.provider]?.label || cfg.provider;
-  const source = personal && personal.apiKey ? 'your personal key' : 'the shared default key';
-  const masked = cfg.apiKey.slice(0, 12) + '…' + cfg.apiKey.slice(-4);
-  await respond(`Provider: *${label}*\nKey source: ${source}\nKey: \`${masked}\``);
 });
 
 // ---------------------------------------------------------------------------
@@ -192,10 +109,10 @@ function friendlyError(err) {
   const msg = err?.message || String(err);
   const status = err?.status || err?.response?.status;
   if (status === 401 || /authentication failed|invalid api key|401/i.test(msg)) {
-    return 'The API key was rejected (401). Grab a fresh free key at https://ai.hackclub.com/keys and run `/stderr-connect <key>`.';
+    return 'The shared API key was rejected (401). This is on the bot admin — ask them to refresh HACKCLUB_API_KEY in .env.';
   }
   if (status === 402 || /insufficient credits|402/i.test(msg)) {
-    return 'The key is out of credits (402). Get your own free Hack Club AI key at https://ai.hackclub.com/keys and run `/stderr-connect <key>`.';
+    return 'The shared key is out of credits (402). Hack Club AI is likely over capacity — try again later or check `/stderr-health`.';
   }
   if (status === 429 || /rate limit|429/i.test(msg)) {
     return 'Rate limited (429). Wait a moment and try again.';
@@ -215,13 +132,10 @@ function aiCommand(system, { wrapCode = false, format = false, usage } = {}) {
       return;
     }
 
-    // Resolve config: explicit user config first, then global default (HACKCLUB_API_KEY)
-    const cfg = store.resolve(command.user_id);
+    // Everyone shares the admin's HACKCLUB_API_KEY — no per-user key setup needed.
+    const cfg = store.getDefault();
     if (!cfg) {
-      await respond(
-        'Not connected. Get a free key at https://ai.hackclub.com/keys and run `/stderr-connect <key>`, ' +
-          'or ask the server admin to set `HACKCLUB_API_KEY` in `.env`.'
-      );
+      await respond('AI commands are not configured. Ask the bot admin to set `HACKCLUB_API_KEY` in `.env`.');
       return;
     }
 
@@ -302,10 +216,31 @@ app.command(
 (async () => {
   try {
     await app.start();
-    const defaultNote = store.getDefault()
+    const def = store.getDefault();
+    const defaultNote = def
       ? ' | Hack Club AI ready'
       : ' | WARNING: no HACKCLUB_API_KEY in .env — AI commands will not work';
     console.log('STDerr is running (Socket Mode)' + defaultNote);
+
+    if (def) {
+      try {
+        await ask('hackclub', def.apiKey, 'Reply with the single word: ok', 'ping');
+        console.log('Shared HACKCLUB_API_KEY verified live — good to go.');
+      } catch (err) {
+        const status = err?.status || err?.response?.status;
+        if (status === 401) {
+          console.error(
+            'WARNING: shared HACKCLUB_API_KEY was rejected (401) at startup. ' +
+              'Every user will hit this since everyone shares this one key. ' +
+              'Get a fresh key at https://ai.hackclub.com/keys and update .env.'
+          );
+        } else {
+          console.warn(
+            `Shared HACKCLUB_API_KEY startup check failed (non-fatal, status ${status || 'unknown'}): ${err.message}`
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error('Failed to start STDerr:', err.message);
     process.exit(1);
