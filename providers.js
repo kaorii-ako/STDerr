@@ -8,9 +8,10 @@ module.exports = {
     label: 'Hack Club AI (Free)',
     kind: 'openai',
     baseURL: 'https://ai.hackclub.com/proxy/v1',
-    model: 'qwen/qwen3-32b',
+    model: 'google/gemini-3-flash-preview',
     // Tried in order when the primary model fails with 402/429/404.
     fallbacks: [
+      'qwen/qwen3-32b',
       'moonshotai/kimi-k2.6',
       'google/gemini-2.5-flash',
       'openai/gpt-oss-120b:free',
